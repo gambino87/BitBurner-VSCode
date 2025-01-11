@@ -335,17 +335,17 @@ function getOptimalHackThreads(ns, hostServer, selectedTarget) {
     ns.hackAnalyze(selectedTarget.hostname) *
     Math.max(selectedTarget.currentMoney, 1);
 
-  const desiredMoney = selectedTarget.maxMoney * 0.7; // Hack only up to 70% of max money
   const hackAmountPerThreadsTargetOf =
-    hackAmountPerThread * selectedTarget.hackThreadsTargetOf || 0;
+    hackAmountPerThread * (selectedTarget.hackThreadsTargetOf ?? 0);
 
   const netCurrentMoney = Math.max(
     selectedTarget.currentMoney - hackAmountPerThreadsTargetOf,
     0
   );
+
   selectedTarget.netMoney = netCurrentMoney;
 
-  const hackableMoney = Math.max(desiredMoney - netCurrentMoney, 0);
+  const hackableMoney = Math.max(selectedTarget.maxMoney - netCurrentMoney, 0);
 
   // Only reduce threads if calculated threads exceed hackable money
   if (
@@ -353,22 +353,27 @@ function getOptimalHackThreads(ns, hostServer, selectedTarget) {
     hackAmountPerThread * threads > hackableMoney
   ) {
     threads = Math.floor(hackableMoney / hackAmountPerThread);
-
     // Fix issues with infinity and negative threads
     if (!isFinite(threads) || threads <= 0) {
       let maxThreads = Math.floor(hostServer.availRam / hackScriptCost);
-
       // Ensure maxThreads doesn't drop below zero
       while (
         maxThreads > 0 &&
-        maxThreads * hackAmountPerThread > hackableMoney
+        maxThreads * hackAmountPerThread < hackableMoney
       ) {
         maxThreads--;
       }
       threads = Math.max(maxThreads, 0);
     }
   }
+  // if (selectedTarget.hostname === "n00dles")
+  //   ns.tprint(`
+  // hackAmountPerThread:${hackAmountPerThread}
+  // threads:${threads}
+  // hackableMoney:${hackableMoney}
+  // hostServer.availRam:${hostServer.availRam}
 
+  // `);
   return Math.max(threads, 0); // Ensure no negative threads are returned
 }
 
@@ -400,7 +405,7 @@ async function preExecCalcs(ns, hostServer, selectedTarget) {
     selectedTarget.canHack &&
     selectedTarget.hasRoot;
 
-  const weakenBoolean = optimalWeakenThreads > 2 && weakenCheck && checkAccess;
+  const weakenBoolean = optimalWeakenThreads > 1 && weakenCheck && checkAccess;
 
   const growBoolean =
     availGrowThreads > 0 &&
@@ -414,11 +419,6 @@ async function preExecCalcs(ns, hostServer, selectedTarget) {
     selectedTarget.netMoney >= selectedTarget.maxMoney * 0.7 &&
     checkAccess;
 
-  if (
-    selectedTarget.maxMoney * 0.7 <= selectedTarget.netMoney &&
-    !hackBoolean
-  ) {
-  }
   return {
     optimalWeakenThreads,
     optimalHackThreads,
