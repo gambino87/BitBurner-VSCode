@@ -5,5 +5,5 @@ export async function main(ns) {
   const host = ns.getHostname();
   const rounded = Number(weakenAmount.toFixed(3));
   await ns.weaken(target);
-  //ns.tprint(`${host} weakened ${target} for ${rounded}!`);
+  ns.tprint(`${host} weakened ${target} for ${rounded}!`);
 }
