@@ -1,7 +1,7 @@
 /** @param {NS} ns */
 export async function main(ns) {
   //Auto Buy Servers
-  await ns.exec("smartdestroy.js", "home", 1);
+  await ns.exec("autobuy.js", "home", 1);
 
   //Silent Mode Option
   //i.e. 'run smartrun.js silent'
