@@ -1,6 +1,12 @@
 /** @param {NS} ns */
 export async function main(ns) {
   //MARK: Init. Scans
+  await ns.exec("smartdestroy.js", "home", 1);
+  let setSilentMode = false;
+  const setSilent = ns.args[0];
+  if (setSilent === "silent") {
+    setSilentMode = true;
+  }
   while (true) {
     const allServers = scanServers(ns);
     await updateServerData(ns, allServers);
@@ -62,7 +68,7 @@ export async function main(ns) {
       }
 
       // MARK: Exec Logic
-      if (weakenBoolean) {
+      if (weakenBoolean && !setSilentMode) {
         const sendWeakenAmnt = ns.weakenAnalyze(optimalWeakenThreads);
         ns.exec(
           "weaken.js",
@@ -72,14 +78,22 @@ export async function main(ns) {
           sendWeakenAmnt
         );
         await ns.sleep(10);
-        // ns.tprint(
-        //   `${server.hostname} >>>>> ${selectedTarget.hostname}: Weakening Target (${optimalWeakenThreads})`
-        // );
+        continue;
+      } else if (weakenBoolean) {
+        const sendWeakenAmnt = ns.weakenAnalyze(optimalWeakenThreads);
+        ns.exec(
+          "weaken.js",
+          server.hostname,
+          optimalWeakenThreads,
+          selectedTarget.hostname,
+          sendWeakenAmnt,
+          setSilentMode
+        );
         await ns.sleep(10);
         continue;
       }
 
-      if (growBoolean) {
+      if (growBoolean && !setSilentMode) {
         ns.exec(
           "grow.js",
           server.hostname,
@@ -87,14 +101,20 @@ export async function main(ns) {
           selectedTarget.hostname
         );
         await ns.sleep(10);
-        // ns.tprint(
-        //   `${server.hostname} >>>>> ${selectedTarget.hostname}: Growing Target (${availGrowThreads})`
-        // );
+        continue;
+      } else if (growBoolean) {
+        ns.exec(
+          "grow.js",
+          server.hostname,
+          availGrowThreads,
+          selectedTarget.hostname,
+          setSilentMode
+        );
         await ns.sleep(10);
         continue;
       }
 
-      if (hackBoolean) {
+      if (hackBoolean && !setSilentMode) {
         const sendHackAmnt =
           ns.hackAnalyze(selectedTarget.hostname) *
           optimalHackThreads *
@@ -107,9 +127,20 @@ export async function main(ns) {
           sendHackAmnt
         );
         await ns.sleep(10);
-        // ns.tprint(
-        //   `${server.hostname} >>>>> ${selectedTarget.hostname}: Hacking Target (${optimalHackThreads})`
-        // );
+        continue;
+      } else if (hackBoolean) {
+        const sendHackAmnt =
+          ns.hackAnalyze(selectedTarget.hostname) *
+          optimalHackThreads *
+          selectedTarget.netMoney;
+        ns.exec(
+          "hack.js",
+          server.hostname,
+          optimalHackThreads,
+          selectedTarget.hostname,
+          sendHackAmnt,
+          setSilentMode
+        );
         await ns.sleep(10);
         continue;
       }
