@@ -1,50 +1,63 @@
 /** @param {NS} ns */
 export async function main(ns) {
-  //MARK: Init. Scans
+  //Auto Buy Servers
   await ns.exec("smartdestroy.js", "home", 1);
+
+  //Silent Mode Option
+  //i.e. 'run smartrun.js silent'
   let setSilentMode = false;
   const setSilent = ns.args[0];
   if (setSilent === "silent") {
     setSilentMode = true;
+  } else {
+    ns.tprint(`
+      -------------------------------------------------------------------------------------------
+      Run with the argument 'silent' to squelch terminal updates of hack, grow and weaken events.
+      i.e.: run smartrun.js silent
+      -------------------------------------------------------------------------------------------
+      `);
   }
+  //MARK: Init. Scans
   while (true) {
-    const allServers = scanServers(ns);
-    await updateServerData(ns, allServers);
-    await ns.sleep(10);
-    const targetableServers = scanForTargets(ns, allServers);
-    const hostServers = scanForHosts(ns, allServers);
-    let selectedTarget = targetableServers[0];
-    await updateServerData(ns, hostServers);
-    await ns.sleep(10);
-    await updateServerData(ns, targetableServers);
+    const allServers = scanServers(ns); //Populate list of all servers with unchangeable server stats
+
+    await updateServerData(ns, allServers); //Update servers with changeable data in prep for target scan
     await ns.sleep(10);
 
+    const targetableServers = scanForTargets(ns, allServers); //Populate list of suitable targets to hack
+    const hostServers = scanForHosts(ns, allServers); //Populate list of suitable servers to run hacks
+
+    await updateServerData(ns, hostServers); //Update host servers data
+    await ns.sleep(10);
+
+    await updateServerData(ns, targetableServers); //Update target servers data
+    await ns.sleep(10);
+
+    let selectedTarget = targetableServers[0]; //Assigns first target
+
     //MARK: Nuke Logic
-    //////
     // Ensure all servers are accessible
     for (const server of allServers) {
       await openPortsAndNuke(ns, server);
     }
     await ns.sleep(10);
 
-    //////
     // Copy updated scripts to all servers
     for (const server of hostServers) {
       const files = ["weaken.js", "grow.js", "hack.js"];
       ns.scp(files, server.hostname, "home");
     }
 
-    //////
-    //BLOCK: EXEC AND TARGET LOGIC
+    await updateServerData(ns, allServers);
+    await ns.sleep(10);
+
+    //Deselects host server if it does not have root access
     for (const server of hostServers) {
       if (!server.canHack) {
         continue;
       }
 
-      await updateServerData(ns, allServers);
-      await ns.sleep(10);
-
-      // Fuction to calc pre-exec booleans and exec arguments
+      // Calculate pre-executable booleans and exec arguments
       const {
         optimalWeakenThreads,
         optimalHackThreads,
@@ -56,8 +69,8 @@ export async function main(ns) {
       await ns.sleep(10);
 
       // MARK: Target Logic
+      // Keep current target if any one of the conditions is met
       if (weakenBoolean || growBoolean || hackBoolean) {
-        // Keep current target since one of the conditions is met
       } else {
         // Switch target if none of the conditions are met
         const currentIndex = targetableServers.findIndex(
@@ -68,6 +81,8 @@ export async function main(ns) {
       }
 
       // MARK: Exec Logic
+      // Execute hacks with the priority: Weaken > Grow > Hack
+      // ns.exec([filename], [host], [threads], [target], [weaken strength], [silentMode = t || f])
       if (weakenBoolean && !setSilentMode) {
         const sendWeakenAmnt = ns.weakenAnalyze(optimalWeakenThreads);
         ns.exec(
@@ -93,6 +108,7 @@ export async function main(ns) {
         continue;
       }
 
+      // ns.exec([filename], [host], [threads], [target], [silentMode = t || f])
       if (growBoolean && !setSilentMode) {
         ns.exec(
           "grow.js",
@@ -114,6 +130,7 @@ export async function main(ns) {
         continue;
       }
 
+      // ns.exec([filename], [host], [threads], [target], [hack strength], [silentMode = t || f])
       if (hackBoolean && !setSilentMode) {
         const sendHackAmnt =
           ns.hackAnalyze(selectedTarget.hostname) *
@@ -198,7 +215,7 @@ async function openPortsAndNuke(ns, server) {
  * @param {NS} ns - Netscript object
  * @param {string} defaults to 'home'; no string is expected
  * @param {array} defaults to an empty array to prevent infinte loops; no array is expected
- * @returns {array} - Returns an array of every server in the ga
+ * @returns {array} - Returns an array of every server in the game
  */
 function scanServers(ns, startServer = "home", visited = new Set()) {
   // Prevent re-scanning the same server
@@ -266,7 +283,7 @@ function scanForHosts(ns, allServers) {
  * dynamically change as loops iterate, while {targetableServers} will not.
  */
 async function updateServerData(ns, allServers) {
-  // Step 1: Collect all active scripts from all servers first
+  // Collect all active scripts from all servers first
   let activeScripts = [];
   for (const server of allServers) {
     activeScripts = activeScripts.concat(
@@ -279,7 +296,7 @@ async function updateServerData(ns, allServers) {
     );
   }
 
-  // Step 2: Update each server's dynamic data and count active threads targeting it
+  // Update each server's dynamic data and count active threads targeting it
   for (const server of allServers) {
     server.currentMoney = ns.getServerMoneyAvailable(server.hostname);
     server.securityLevel = ns.getServerSecurityLevel(server.hostname);
@@ -293,7 +310,7 @@ async function updateServerData(ns, allServers) {
     server.growThreadsTargetOf = 0;
     server.hackThreadsTargetOf = 0;
 
-    // Step 3: Check the combined list for scripts targeting this server
+    // Check the combined list for scripts targeting this server
     for (const script of activeScripts) {
       if (script.target === server.hostname) {
         if (script.filename === "weaken.js") {
@@ -346,7 +363,7 @@ function getOptimalWeakenThreads(ns, hostServer, selectedTarget) {
   // Determine the maximum possible threads
   let optimalWeakenThreads = Math.min(availThreads, threadsNeededToCap);
 
-  return optimalWeakenThreads; //Returns a number (not object)
+  return optimalWeakenThreads; //Returns a number (not object!)
 }
 
 // MARK: (f)H. Threads
@@ -397,47 +414,59 @@ function getOptimalHackThreads(ns, hostServer, selectedTarget) {
       threads = Math.max(maxThreads, 0);
     }
   }
-  // if (selectedTarget.hostname === "n00dles")
-  //   ns.tprint(`
-  // hackAmountPerThread:${hackAmountPerThread}
-  // threads:${threads}
-  // hackableMoney:${hackableMoney}
-  // hostServer.availRam:${hostServer.availRam}
-
-  // `);
   return Math.max(threads, 0); // Ensure no negative threads are returned
 }
 
 // MARK: (f)Exec. Calcs
 async function preExecCalcs(ns, hostServer, selectedTarget) {
+  // Calculate how many threads can be ran by host server or how many threads are need to
+  // bring target security to 0. Accounts for concurrently running scripts.
   const optimalWeakenThreads =
     getOptimalWeakenThreads(ns, hostServer, selectedTarget) || 0;
 
+  // Calculate how many threads can be ran by host server or how many threads are need to
+  // bring target money to 70% of max. Accounts for concurrently running scripts.
   const optimalHackThreads =
     getOptimalHackThreads(ns, hostServer, selectedTarget) || 0;
 
+  // Value used to send to weaken.js to tprint how much will be weakened by this process
   const sendWeakenAmnt = ns.weakenAnalyze(optimalWeakenThreads) || 0;
   const sendWeakenAmntFormatted = Math.round(sendWeakenAmnt * 1000) / 1000;
+
+  // Checks if current target's security is low enough to be worth targetting
   const weakenCheck =
     selectedTarget.netSec > selectedTarget.minSecurity * 1.1 ||
     selectedTarget.netSec > selectedTarget.minSecurity + 2;
+
+  // Value used to send to hack.js to tprint how much money will be hacked by this process
   const sendHackAmnt =
     ns.hackAnalyze(selectedTarget.hostname) *
       (optimalHackThreads * selectedTarget.currentMoney) || 0;
   const sendHackFormatted = Math.floor(sendHackAmnt);
+
+  // Calculate how many grow threads can be used to grow the target
   const availGrowThreads = Math.floor(hostServer.availRam / 1.75) || 0;
+
+  // Check if host server is at full ram;  can only grow if true
   let growthFullSend = false;
   if (hostServer.availRam === hostServer.maxRam) {
     growthFullSend = true;
   }
+
+  // Check if host and target have root access
   const checkAccess =
     hostServer.canHack &&
     hostServer.hasRoot &&
     selectedTarget.canHack &&
     selectedTarget.hasRoot;
 
+  // Logic to determine if target is worth weakening
+  // -- Can send at least 1 threads, uses weaken check from above, has root access
   const weakenBoolean = optimalWeakenThreads > 1 && weakenCheck && checkAccess;
 
+  // Logic to determine if target is worth growing
+  // -- Can send at least 1 threads, target is at less than 70% of max money ( afterconcurrently running scripts)
+  // -- and has root access
   const growBoolean =
     availGrowThreads > 0 &&
     selectedTarget.netMoney < selectedTarget.maxMoney * 0.7 &&
@@ -445,6 +474,9 @@ async function preExecCalcs(ns, hostServer, selectedTarget) {
     selectedTarget.growThreadsTargetOf === 0 &&
     growthFullSend;
 
+  // Logic to determine if target is worth hacking
+  // -- Can send at least 1 thread, target is at 70% of max money (after concurrently running scripts)
+  // -- and has root access
   const hackBoolean =
     optimalHackThreads > 0 &&
     selectedTarget.netMoney >= selectedTarget.maxMoney * 0.7 &&
