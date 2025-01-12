@@ -21,16 +21,16 @@ export async function main(ns) {
   while (true) {
     const allServers = scanServers(ns); //Populate list of all servers with unchangeable server stats
 
-    await updateServerData(ns, allServers); //Update servers with changeable data in prep for target scan
+    updateServerData(ns, allServers); //Update servers with changeable data in prep for target scan
     await ns.sleep(10);
 
-    const targetableServers = scanForTargets(ns, allServers); //Populate list of suitable targets to hack
-    const hostServers = scanForHosts(ns, allServers); //Populate list of suitable servers to run hacks
+    const targetableServers = scanForTargets(allServers); //Populate list of suitable targets to hack
+    const hostServers = scanForHosts(allServers); //Populate list of suitable servers to run hacks
 
-    await updateServerData(ns, hostServers); //Update host servers data
+    updateServerData(ns, hostServers); //Update host servers data
     await ns.sleep(10);
 
-    await updateServerData(ns, targetableServers); //Update target servers data
+    updateServerData(ns, targetableServers); //Update target servers data
     await ns.sleep(10);
 
     let selectedTarget = targetableServers[0]; //Assigns first target
@@ -48,7 +48,7 @@ export async function main(ns) {
       ns.scp(files, server.hostname, "home");
     }
 
-    await updateServerData(ns, allServers);
+    updateServerData(ns, allServers);
     await ns.sleep(10);
 
     //Deselects host server if it does not have root access
@@ -70,8 +70,7 @@ export async function main(ns) {
 
       // MARK: Target Logic
       // Keep current target if any one of the conditions is met
-      if (weakenBoolean || growBoolean || hackBoolean) {
-      } else {
+      if (!(weakenBoolean || growBoolean || hackBoolean)) {
         // Switch target if none of the conditions are met
         const currentIndex = targetableServers.findIndex(
           (s) => s.hostname === selectedTarget.hostname
@@ -199,10 +198,10 @@ async function openPortsAndNuke(ns, server) {
   if (server.openPorts >= 4 && portTools.includes("HTTPWorm.exe")) {
     ns.httpworm(server.hostname);
   }
-  if (server.openPorts == 5 && portTools.includes("SQLInject.exe")) {
+  if (server.openPorts === 5 && portTools.includes("SQLInject.exe")) {
     ns.sqlinject(server.hostname);
   }
-  let openablePort = portTools.length;
+  const openablePort = portTools.length;
   if (openablePort >= server.openPorts) {
     ns.nuke(server.hostname);
   }
@@ -213,8 +212,8 @@ async function openPortsAndNuke(ns, server) {
 /**
  * Determines the optimal number of weaken threads without over-weakening a server.
  * @param {NS} ns - Netscript object
- * @param {string} defaults to 'home'; no string is expected
- * @param {array} defaults to an empty array to prevent infinte loops; no array is expected
+ * @param {string} startServer defaults to 'home'; no string is expected
+ * @param {array} visited defaults to an empty array to prevent infinte loops; no array is expected
  * @returns {array} - Returns an array of every server in the game
  */
 function scanServers(ns, startServer = "home", visited = new Set()) {
@@ -235,7 +234,7 @@ function scanServers(ns, startServer = "home", visited = new Set()) {
   };
 
   // Store the current server's data in the results
-  let allServers = [currentServerData];
+  const allServers = [currentServerData];
 
   // Recursively scan connected servers and collect their data
   const connectedServers = ns.scan(startServer);
@@ -251,18 +250,17 @@ function scanServers(ns, startServer = "home", visited = new Set()) {
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /**
  * Determines the optimal number of weaken threads without over-weakening a server.
- * @param {NS} ns - Netscript object
  * @param {array} allServers - Array of every server
  * @returns {array} - Returns an array of servers filtering out server with 0 money
  */
-function scanForTargets(ns, allServers) {
+function scanForTargets(allServers) {
   let targetServers = allServers.filter(
     (server) => server.maxMoney > 0 && server.canHack
   );
   return targetServers;
 }
 
-function scanForHosts(ns, allServers) {
+function scanForHosts(allServers) {
   let hostServers = allServers.filter(
     (server) =>
       server.maxRam > 0 && server.canHack && server.hostname !== "home"
@@ -279,12 +277,10 @@ function scanForHosts(ns, allServers) {
  * @returns {array, array} - Adds changeable data points to all arrays. Then copies that array and
  *                           removes servers with 0 makes money; used for targetting.
  *
- * NOTE: {targetServers} is different from {targetableServers} because {targetServers} information will
- * dynamically change as loops iterate, while {targetableServers} will not.
  */
 async function updateServerData(ns, allServers) {
   // Collect all active scripts from all servers first
-  let activeScripts = [];
+  const activeScripts = [];
   for (const server of allServers) {
     activeScripts = activeScripts.concat(
       ns.ps(server.hostname).map((script) => ({
@@ -329,10 +325,10 @@ async function updateServerData(ns, allServers) {
   }
 
   // Return both filtered lists updated with dynamic values
-  let availableServers = allServers.filter(
+  const availableServers = allServers.filter(
     (server) => server.hasRoot && server.hostname !== "home"
   );
-  let targetableServers = allServers.filter(
+  const targetableServers = allServers.filter(
     (server) => server.hasRoot && server.maxMoney > 0
   );
 
@@ -361,7 +357,7 @@ function getOptimalWeakenThreads(ns, hostServer, selectedTarget) {
   );
 
   // Determine the maximum possible threads
-  let optimalWeakenThreads = Math.min(availThreads, threadsNeededToCap);
+  const optimalWeakenThreads = Math.min(availThreads, threadsNeededToCap);
 
   return optimalWeakenThreads; //Returns a number (not object!)
 }
